@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vehicle Rental System — Sign in</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="auth-wrap">
+    <aside class="auth-hero">
+        <div class="mark">Prime Ridez</div>
+        <div>
+            <h2>Make Every Journey Count.</h2>
+            <p>Reliable vehicles, simple bookings, and a smoother way to get where you’re going.</p>
+        </div>
+    </aside>
+    <main class="auth-main">
+    <div class="auth-card">
+        <h1>Welcome</h1>
+        <div class="sub">Log in or create an account to continue.</div>
+
+        <div class="tabs">
+            <button id="tab-login" class="active" onclick="showTab('login')">Log in</button>
+            <button id="tab-customer" onclick="showTab('customer')">Customer sign-up</button>
+            <button id="tab-admin" onclick="showTab('admin')">Admin sign-up</button>
+        </div>
+
+        <div id="alert" class="alert hidden"></div>
+
+        <!-- Login -->
+        <form id="form-login">
+            <label>Username</label>
+            <input type="text" id="login-username" required>
+            <label>Password</label>
+            <input type="password" id="login-password" required>
+            <div class="btn-row">
+                <button type="submit" class="btn-primary">Log In</button>
+            </div>
+        </form>
+
+        <!-- Register Customer -->
+        <form id="form-customer" class="hidden">
+            <label>Username</label>
+            <input type="text" id="c-username" required>
+            <label>Password</label>
+            <input type="password" id="c-password" required>
+            <label>Full Name</label>
+            <input type="text" id="c-name" required>
+            <div class="field-row">
+                <div>
+                    <label>Phone</label>
+                    <input type="text" id="c-phone">
+                </div>
+                <div>
+                    <label>License Number</label>
+                    <input type="text" id="c-license">
+                </div>
+            </div>
+            <div class="btn-row">
+                <button type="submit" class="btn-primary">Create customer account</button>
+            </div>
+        </form>
+
+        <!-- Register Admin -->
+        <form id="form-admin" class="hidden">
+            <label>Username</label>
+            <input type="text" id="a-username" required>
+            <label>Password</label>
+            <input type="password" id="a-password" required>
+            <label>Full Name</label>
+            <input type="text" id="a-name" required>
+            <div class="helper-text">Admin accounts can manage vehicles, users, and maintenance.</div>
+            <div class="btn-row">
+                <button type="submit" class="btn-primary">Create admin account</button>
+            </div>
+        </form>
+    </div>
+    </main>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    function showTab(which) {
+        ["login", "customer", "admin"].forEach(t => {
+            document.getElementById("tab-" + t).classList.toggle("active", t === which);
+            document.getElementById("form-" + t).classList.toggle("hidden", t !== which);
+        });
+        hideAlert("alert");
+    }
+
+    document.getElementById("form-login").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const username = document.getElementById("login-username").value.trim();
+        const password = document.getElementById("login-password").value;
+        const { ok, data } = await API.post("/api/login", { username, password });
+        if (ok && data.success) {
+            Session.save(data.user);
+            window.location.href = "dashboard.html";
+        } else {
+            showAlert("alert", data.message || "Login failed.", "error");
+        }
+    });
+
+    document.getElementById("form-customer").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+            username: document.getElementById("c-username").value.trim(),
+            password: document.getElementById("c-password").value,
+            name: document.getElementById("c-name").value.trim(),
+            phone: document.getElementById("c-phone").value.trim(),
+            license: document.getElementById("c-license").value.trim(),
+        };
+        const { ok, data } = await API.post("/api/register/customer", payload);
+        if (ok && data.success) {
+            Session.save(data.user);
+            window.location.href = "dashboard.html";
+        } else {
+            showAlert("alert", data.message || "Registration failed.", "error");
+        }
+    });
+
+    document.getElementById("form-admin").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+            username: document.getElementById("a-username").value.trim(),
+            password: document.getElementById("a-password").value,
+            name: document.getElementById("a-name").value.trim(),
+        };
+        const { ok, data } = await API.post("/api/register/admin", payload);
+        if (ok && data.success) {
+            Session.save(data.user);
+            window.location.href = "dashboard.html";
+        } else {
+            showAlert("alert", data.message || "Registration failed.", "error");
+        }
+    });
+
+    // If already logged in, skip straight to the dashboard
+    if (Session.get()) {
+        window.location.href = "dashboard.html";
+    }
+</script>
+</body>
+</html>
