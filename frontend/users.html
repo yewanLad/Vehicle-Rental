@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Users — Vehicle Rental System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell">
+    <div class="content">
+        <h1>Users</h1>
+        <p class="empty-note">New accounts are created from the sign-in screen. This page is a read-only directory.</p>
+
+        <div class="panel">
+            <table>
+                <thead>
+                    <tr><th class="id">ID</th><th>Username</th><th>Role</th><th>Name</th><th>Phone</th><th>License</th></tr>
+                </thead>
+                <tbody id="user-rows"></tbody>
+            </table>
+            <div id="empty-note" class="empty-note hidden">No users yet.</div>
+        </div>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script>
+    renderNav("users.html");
+
+    async function loadUsers() {
+        const { ok, data } = await API.get("/api/users");
+        if (!ok) return;
+        const rows = document.getElementById("user-rows");
+        rows.innerHTML = "";
+        document.getElementById("empty-note").classList.toggle("hidden", data.length > 0);
+
+        data.forEach(u => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td class="id">${u.id}</td>
+                <td>${u.username}</td>
+                <td><span class="pill ${u.role === "ADMIN" ? "pill-amber" : "pill-green"}">${u.role}</span></td>
+                <td>${u.name || "—"}</td>
+                <td>${u.phone || "—"}</td>
+                <td>${u.license || "—"}</td>
+            `;
+            rows.appendChild(tr);
+        });
+    }
+
+    loadUsers();
+</script>
+</body>
+</html>

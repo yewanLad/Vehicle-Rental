@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vehicles — Vehicle Rental System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell">
+    <div class="content">
+        <h1>Vehicles</h1>
+        <div id="alert" class="alert hidden"></div>
+
+        <div class="panel hidden" id="add-panel">
+            <h2 style="margin-top:0">Add a vehicle</h2>
+            <form id="form-add">
+                <div class="field-row">
+                    <div>
+                        <label>Type</label>
+                        <select id="v-type">
+                            <option value="car">Car</option>
+                            <option value="van">Van</option>
+                            <option value="motorcycle">Motorcycle</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Year</label>
+                        <input type="number" id="v-year" required>
+                    </div>
+                </div>
+                <div class="field-row">
+                    <div>
+                        <label>Brand</label>
+                        <input type="text" id="v-brand" required>
+                    </div>
+                    <div>
+                        <label>Model</label>
+                        <input type="text" id="v-model" required>
+                    </div>
+                </div>
+                <label>Daily Rate (Rs.)</label>
+                <input type="number" step="0.01" id="v-rate" required>
+                <div class="btn-row">
+                    <button type="submit" class="btn-primary">Add vehicle</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h2 style="margin-top:0">Fleet</h2>
+            <table id="vehicle-table">
+                <thead>
+                    <tr>
+                        <th class="id">ID</th><th>Type</th><th>Brand / Model</th><th>Year</th>
+                        <th>Daily Rate</th><th>Status</th><th></th>
+                    </tr>
+                </thead>
+                <tbody id="vehicle-rows"></tbody>
+            </table>
+            <div id="empty-note" class="empty-note hidden">No vehicles yet.</div>
+        </div>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script>
+    renderNav("vehicles.html");
+    const user = Session.get();
+    if (user.role === "ADMIN") document.getElementById("add-panel").classList.remove("hidden");
+
+    async function loadVehicles() {
+        const { ok, data } = await API.get("/api/vehicles");
+        if (!ok) return;
+        const rows = document.getElementById("vehicle-rows");
+        rows.innerHTML = "";
+        document.getElementById("empty-note").classList.toggle("hidden", data.length > 0);
+
+        data.forEach(v => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td class="id">${v.id}</td>
+                <td>${v.type}</td>
+                <td>${v.brand} ${v.model}</td>
+                <td>${v.year}</td>
+                <td>Rs.${v.dailyRate.toFixed(2)}</td>
+                <td><span class="pill ${v.available ? "pill-green" : "pill-red"}">${v.available ? "Available" : "Not available"}</span></td>
+                <td>${user.role === "ADMIN" ? `<button class="btn-danger" onclick="removeVehicle('${v.id}')">Remove</button>` : ""}</td>
+            `;
+            rows.appendChild(tr);
+        });
+    }
+
+    document.getElementById("form-add").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+            type: document.getElementById("v-type").value,
+            brand: document.getElementById("v-brand").value.trim(),
+            model: document.getElementById("v-model").value.trim(),
+            year: document.getElementById("v-year").value,
+            dailyRate: document.getElementById("v-rate").value,
+        };
+        const { ok, data } = await API.post("/api/vehicles", payload);
+        if (ok && data.success) {
+            showAlert("alert", `Added ${data.vehicle.brand} ${data.vehicle.model} (${data.vehicle.id}).`, "success");
+            e.target.reset();
+            loadVehicles();
+        } else {
+            showAlert("alert", data.message || "Could not add vehicle.", "error");
+        }
+    });
+
+    async function removeVehicle(id) {
+        if (!confirm("Remove vehicle " + id + "?")) return;
+        const { ok, data } = await API.post("/api/vehicles/delete", { id });
+        if (ok && data.success) {
+            loadVehicles();
+        } else {
+            showAlert("alert", "Could not remove vehicle.", "error");
+        }
+    }
+
+    loadVehicles();
+</script>
+</body>
+</html>
