@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bookings — Vehicle Rental System</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell">
+    <div class="content">
+        <h1>Bookings Management</h1>
+        <div id="alert" class="alert hidden"></div>
+
+        <div class="panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="margin: 0;">All Rentals & Bookings</h2>
+                <select id="status-filter" onchange="loadBookings()" style="width: auto; padding: 6px 12px;">
+                    <option value="ALL">All Statuses</option>
+                    <option value="CONFIRMED">Confirmed</option>
+                    <option value="ACTIVE">Active (Picked Up)</option>
+                    <option value="RETURNED">Returned</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                </select>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th class="id">ID</th>
+                        <th>Customer</th>
+                        <th>Vehicle</th>
+                        <th>Dates / Days</th>
+                        <th>Total Cost</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="booking-rows"></tbody>
+            </table>
+            <div id="empty-note" class="empty-note hidden">No bookings found.</div>
+        </div>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script>
+    renderNav("bookings.html");
+
+    async function loadBookings() {
+        const filter = document.getElementById("status-filter").value;
+        const { ok, data } = await API.get("/api/bookings");
+        if (!ok) return;
+
+        const rows = document.getElementById("booking-rows");
+        rows.innerHTML = "";
+
+        const filtered = filter === "ALL" ? data : data.filter(b => b.status === filter);
+        document.getElementById("empty-note").classList.toggle("hidden", filtered.length > 0);
+
+        filtered.forEach(r => {
+            const tr = document.createElement("tr");
+            const pillClass = r.status === "ACTIVE" ? "pill-amber" : 
+                             r.status === "CONFIRMED" ? "pill-green" : "pill-muted";
+
+            tr.innerHTML = `
+                <td class="id">${r.bookingId || r.id}</td>
+                <td><strong>${r.customerName || r.customerId}</strong></td>
+                <td>${r.vehicleName || r.vehicleId}</td>
+                <td>${r.startDate || ''} (${r.numberOfDays || r.days} days)</td>
+                <td>Rs.${(r.totalAmount || r.totalCost || 0).toFixed(2)}</td>
+                <td><span class="pill ${pillClass}">${r.status}</span></td>
+                <td style="text-align: right;">
+                    ${r.status === "ACTIVE" ? `<button class="btn-secondary" onclick="returnVehicle('${r.bookingId || r.id}')">Process Return</button>` : ""}
+                    ${r.status === "CONFIRMED" ? `<button class="btn-primary" onclick="pickupVehicle('${r.bookingId || r.id}')">Mark Handed Over</button>` : ""}
+                </td>
+            `;
+            rows.appendChild(tr);
+        });
+    }
+
+    async function pickupVehicle(bookingId) {
+        const { ok, data } = await API.post(`/api/bookings/${bookingId}/pickup`);
+        if (ok) {
+            showAlert("alert", `Vehicle handed over for booking ${bookingId}.`, "success");
+            loadBookings();
+        } else {
+            showAlert("alert", data.message || "Could not process handover.", "error");
+        }
+    }
+
+    async function returnVehicle(bookingId) {
+        const { ok, data } = await API.post("/api/bookings/return", { bookingId });
+        if (ok && data.success) {
+            showAlert("alert", `Vehicle returned successfully.`, "success");
+            loadBookings();
+        } else {
+            showAlert("alert", data.message || "Could not process return.", "error");
+        }
+    }
+
+    loadBookings();
+</script>
+</body>
+</html>
