@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Users</title>
+    <title>Users | PrimeRidez</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div class="app-shell" id="app-shell">
     <div class="content">
         <h1>Users</h1>
-        <p class="empty-note">New accounts are created from the sign-in screen. This page is a read-only directory.</p>
+        <p class="empty-note">New accounts are created from the sign-in screen. Admins can edit or delete any account here.</p>
+        <div id="alert" class="alert hidden"></div>
 
         <div class="panel">
             <table>
                 <thead>
-                    <tr><th class="id">ID</th><th>Username</th><th>Role</th><th>Name</th><th>Phone</th><th>License</th></tr>
+                    <tr><th class="id">ID</th><th>Username</th><th>Role</th><th>Name</th><th>Phone</th><th>License</th><th style="text-align:right;">Action</th></tr>
                 </thead>
                 <tbody id="user-rows"></tbody>
             </table>
@@ -24,30 +25,110 @@
     </div>
 </div>
 
+<!-- Edit user -->
+<div id="edit-modal" class="modal-overlay hidden">
+    <div class="modal-body">
+        <h2 id="edit-title">Edit user</h2>
+        <form id="form-edit">
+            <input type="hidden" id="e-id">
+            <label>Username</label>
+            <input type="text" id="e-username" required>
+            <label>Full Name</label>
+            <input type="text" id="e-name" required>
+            <div id="e-customer-fields" class="field-row">
+                <div><label>Phone</label><input type="text" id="e-phone"></div>
+                <div><label>License Number</label><input type="text" id="e-license"></div>
+            </div>
+            <label>New Password</label>
+            <input type="password" id="e-password" placeholder="Leave blank to keep the current password">
+            <div class="btn-row">
+                <button type="button" class="btn-secondary" onclick="closeModal('edit-modal')">Cancel</button>
+                <button type="submit" class="btn-primary">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="js/api.js"></script>
 <script src="js/nav.js"></script>
 <script>
     renderNav("users.html");
+    const me = Session.get();
+    let users = [];
 
     async function loadUsers() {
         const { ok, data } = await API.get("/api/users");
         if (!ok) return;
+        users = data;
         const rows = document.getElementById("user-rows");
         rows.innerHTML = "";
         document.getElementById("empty-note").classList.toggle("hidden", data.length > 0);
 
         data.forEach(u => {
+            const id = esc(u.id);
+            const isSelf = u.id === me.id;
             const tr = document.createElement("tr");
             tr.innerHTML = `
-                <td class="id">${u.id}</td>
-                <td>${u.username}</td>
-                <td><span class="pill ${u.role === "ADMIN" ? "pill-amber" : "pill-green"}">${u.role}</span></td>
-                <td>${u.name || "—"}</td>
-                <td>${u.phone || "—"}</td>
-                <td>${u.license || "—"}</td>
+                <td class="id">${id}</td>
+                <td>${esc(u.username)}${isSelf ? ' <span class="helper-text">(you)</span>' : ""}</td>
+                <td><span class="pill ${u.role === "ADMIN" ? "pill-amber" : "pill-green"}">${esc(u.role)}</span></td>
+                <td>${esc(u.name) || "—"}</td>
+                <td>${esc(u.phone) || "—"}</td>
+                <td>${esc(u.license) || "—"}</td>
+                <td><div class="actions">
+                    <button class="btn-secondary" onclick="openEdit('${id}')">Edit</button>
+                    ${isSelf ? "" : `<button class="btn-danger" onclick="deleteUser('${id}')">Delete</button>`}
+                </div></td>
             `;
             rows.appendChild(tr);
         });
+    }
+
+    function openEdit(id) {
+        const u = users.find(x => x.id === id);
+        if (!u) return;
+        document.getElementById("edit-title").textContent = `Edit ${u.id} (${u.role})`;
+        document.getElementById("e-id").value = u.id;
+        document.getElementById("e-username").value = u.username;
+        document.getElementById("e-name").value = u.name || "";
+        document.getElementById("e-phone").value = u.phone || "";
+        document.getElementById("e-license").value = u.license || "";
+        document.getElementById("e-password").value = "";
+        document.getElementById("e-customer-fields").classList.toggle("hidden", u.role !== "CUSTOMER");
+        openModal("edit-modal");
+    }
+
+    document.getElementById("form-edit").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+            id: document.getElementById("e-id").value,
+            username: document.getElementById("e-username").value.trim(),
+            name: document.getElementById("e-name").value.trim(),
+            phone: document.getElementById("e-phone").value.trim(),
+            license: document.getElementById("e-license").value.trim(),
+            password: document.getElementById("e-password").value,
+        };
+        const { ok, data } = await API.post("/api/users/update", payload);
+        closeModal("edit-modal");
+        if (ok && data.success) {
+            // if the admin edited their own account, keep the session in sync
+            if (data.user.id === me.id) Session.save(data.user);
+            showAlert("alert", `User ${data.user.id} updated.`, "success");
+            loadUsers();
+        } else {
+            showAlert("alert", data.message || "Could not update user.", "error");
+        }
+    });
+
+    async function deleteUser(id) {
+        if (!confirm("Delete user " + id + "? This cannot be undone.")) return;
+        const { ok, data } = await API.post("/api/users/delete", { id });
+        if (ok && data.success) {
+            showAlert("alert", `User ${id} deleted.`, "success");
+            loadUsers();
+        } else {
+            showAlert("alert", data.message || "Could not delete user.", "error");
+        }
     }
 
     loadUsers();
