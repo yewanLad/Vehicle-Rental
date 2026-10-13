@@ -3,6 +3,7 @@ package com.rental.user;
 import java.util.ArrayList;
 import java.util.List;
 import java.io.*;
+import com.rental.common.IdGenerator;
 
 public class UserList {
     private List<User> users = new ArrayList<>();
