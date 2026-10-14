@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Prime Ridez - Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+
+</head>
+<body>
+<div class="app-shell" id="app-shell">
+    <div class="content">
+        <h1>Welcome back<span id="welcome-name"></span></h1>
+        <p class="empty-note" id="role-note"></p>
+
+        <div id="alert" class="alert hidden"></div>
+
+        <!-- Admin View -->
+        <div id="admin-view" class="hidden">
+            <div id="summary" class="stats"></div>
+        </div>
+
+        <!-- Customer View -->
+        <div id="customer-view" class="hidden">
+            <h2>Available Vehicles for Rent</h2>
+            <div id="vehicle-grid" class="vehicle-grid"></div>
+            <div id="no-vehicles" class="empty-note hidden">No vehicles currently available for rent.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Booking & Payment Modal for Customer -->
+<div id="booking-modal" class="modal-overlay hidden">
+    <div class="modal-body">
+        <h2 id="modal-vehicle-title" style="margin-top:0">Rent Vehicle</h2>
+        <form id="form-customer-book">
+            <input type="hidden" id="modal-vehicle-id">
+            <div class="field-row">
+                <div>
+                    <label>Start Date</label>
+                    <input type="date" id="b-start-date" required>
+                </div>
+                <div>
+                    <label>Days</label>
+                    <input type="number" id="b-days" min="1" value="1" required oninput="updateCalculatedTotal()">
+                </div>
+            </div>
+
+            <div style="margin: 15px 0; padding: 12px; background: var(--bg); border-radius: 8px;">
+                <span class="helper-text">Estimated Total Cost:</span>
+                <div id="calculated-total" style="font-size: 1.4rem; font-weight: 700; color: var(--ink);">Rs.0.00</div>
+            </div>
+
+            <label>Payment Method</label>
+            <select id="p-method" onchange="toggleCardField(this.value)">
+                <option value="Card">Card</option>
+                <option value="Cash">Cash</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+            </select>
+
+            <div id="card-field" style="margin-top: 10px;">
+                <label>Card Number (Simulated)</label>
+                <input type="text" id="p-card-no" placeholder="4111 1111 1111 1234">
+            </div>
+
+            <div class="btn-row" style="margin-top: 20px;">
+                <button type="button" class="btn-secondary" onclick="closeBookingModal()">Cancel</button>
+                <button type="submit" class="btn-primary">Pay & Confirm Booking</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Text Receipt Output Modal -->
+<div id="receipt-modal" class="modal-overlay hidden">
+    <div class="modal-body">
+        <h2 style="margin-top:0">Booking Confirmed!</h2>
+        <p class="helper-text">Your booking is confirmed. Collect the vehicle on your start date — you can edit or cancel the booking from the Bookings page until then.</p>
+        <pre id="receipt-content" class="receipt-box"></pre>
+        <div class="btn-row" style="margin-top: 15px;">
+            <button class="btn-primary" onclick="closeReceiptModal()">Done</button>
+        </div>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+
+</body>
+</html>
