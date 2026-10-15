@@ -24,4 +24,15 @@ public class MaintenanceRecord {
     public void setStatus(String status) { this.status = status; }
     public void setIssueDescription(String issueDescription) { this.issueDescription = issueDescription; }
     public void setCost(double cost) { this.cost = cost; }
+
+    public String toFileString() {
+        // commas inside the description would break the simple CSV format, so replace them
+        return id + "," + vehicleId + "," + issueDescription.replace(",", ";") + "," + cost + "," + status;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("[%s] Vehicle:%s Issue:%s Cost:Rs.%.2f Status:%s",
+                id, vehicleId, issueDescription, cost, status);
+    }
 }
