@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Prime Ridez - Maintenance</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell">
+    <div class="content">
+        <h1>Maintenance Management</h1>
+        <div id="alert" class="alert hidden"></div>
+
+        <div class="panel">
+            <h2 style="margin-top:0">Log Vehicle Issue</h2>
+            <form id="form-report">
+                <div class="field-row">
+                    <div>
+                        <label>Select Vehicle</label>
+                        <select id="m-vehicle" required></select>
+                    </div>
+                    <div>
+                        <label>Estimated Repair Cost (Rs.)</label>
+                        <input type="number" step="0.01" min="0" id="m-cost" placeholder="0.00" required>
+                    </div>
+                </div>
+                <label>Issue Description</label>
+                <input type="text" id="m-issue" placeholder="e.g. Engine oil replacement and brake inspection" required>
+                <div class="helper-text">Logging an issue takes the vehicle out of the available fleet until the record is completed. Vehicles with a current booking cannot be logged.</div>
+                <div class="btn-row">
+                    <button type="submit" class="btn-primary">Log Maintenance Issue</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h2 style="margin-top:0">Maintenance Records Log</h2>
+            <table>
+                <thead>
+                    <tr><th class="id">ID</th><th>Vehicle</th><th>Issue Description</th><th>Cost</th><th>Status</th><th style="text-align: right;">Action</th></tr>
+                </thead>
+                <tbody id="maint-rows"></tbody>
+            </table>
+            <div id="empty-note" class="empty-note hidden">No maintenance records logged.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit record -->
+<div id="edit-modal" class="modal-overlay hidden">
+    <div class="modal-body">
+        <h2 id="edit-title">Edit maintenance record</h2>
+        <form id="form-edit">
+            <input type="hidden" id="e-id">
+            <label>Issue Description</label>
+            <input type="text" id="e-issue" required>
+            <label>Repair Cost (Rs.)</label>
+            <input type="number" step="0.01" min="0" id="e-cost" required>
+            <div class="btn-row">
+                <button type="button" class="btn-secondary" onclick="closeModal('edit-modal')">Cancel</button>
+                <button type="submit" class="btn-primary">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script>
+    renderNav("maintenance.html");
+    let records = [];
+
+    async function loadVehiclesDropdown() {
+        const { ok, data } = await API.get("/api/vehicles");
+        if (!ok) return;
+        const select = document.getElementById("m-vehicle");
+        select.innerHTML = "";
+        data.forEach(v => {
+            const opt = document.createElement("option");
+            opt.value = v.id;
+            opt.textContent = `${v.brand} ${v.model} (${v.id}) — ${v.available ? "Available" : "Unavailable"}`;
+            select.appendChild(opt);
+        });
+    }
+
+    async function loadRecords() {
+        const { ok, data } = await API.get("/api/maintenance");
+        if (!ok) return;
+        records = data;
+        const rows = document.getElementById("maint-rows");
+        rows.innerHTML = "";
+        document.getElementById("empty-note").classList.toggle("hidden", data.length > 0);
+
+        data.forEach(m => {
+            const id = esc(m.id);
+            const isPending = m.status === "PENDING";
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td class="id">${id}</td>
+                <td>${esc(m.vehicleName)}<div class="helper-text" style="margin-top:0">${esc(m.vehicleId)}</div></td>
+                <td>${esc(m.issue)}</td>
+                <td>${money(m.cost)}</td>
+                <td><span class="pill ${isPending ? "pill-amber" : "pill-green"}">${esc(m.status)}</span></td>
+                <td><div class="actions">
+                    ${isPending ? `<button class="btn-primary" onclick="completeRecord('${id}')">Complete &amp; Release</button>` : ""}
+                    <button class="btn-secondary" onclick="openEdit('${id}')">Edit</button>
+                    <button class="btn-danger" onclick="deleteRecord('${id}')">Delete</button>
+                </div></td>
+            `;
+            rows.appendChild(tr);
+        });
+    }
+
+    // ----- create -----
+    document.getElementById("form-report").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+            vehicleId: document.getElementById("m-vehicle").value,
+            issue: document.getElementById("m-issue").value.trim(),
+            cost: document.getElementById("m-cost").value,
+        };
+        const { ok, data } = await API.post("/api/maintenance", payload);
+        if (ok && data.success) {
+            showAlert("alert", "Maintenance record logged successfully.", "success");
+            e.target.reset();
+            loadRecords();
+            loadVehiclesDropdown();
+        } else {
+            showAlert("alert", data.message || "Could not log maintenance issue.", "error");
+        }
+    });
+
+    // ----- update -----
+    function openEdit(id) {
+        const m = records.find(x => x.id === id);
+        if (!m) return;
+        document.getElementById("edit-title").textContent = `Edit record ${m.id}`;
+        document.getElementById("e-id").value = m.id;
+        document.getElementById("e-issue").value = m.issue;
+        document.getElementById("e-cost").value = m.cost;
+        openModal("edit-modal");
+    }
+
+    document.getElementById("form-edit").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const { ok, data } = await API.post("/api/maintenance/update", {
+            id: document.getElementById("e-id").value,
+            issue: document.getElementById("e-issue").value.trim(),
+            cost: document.getElementById("e-cost").value,
+        });
+        closeModal("edit-modal");
+        if (ok && data.success) {
+            showAlert("alert", "Maintenance record updated.", "success");
+            loadRecords();
+        } else {
+            showAlert("alert", data.message || "Could not update record.", "error");
+        }
+    });
+
+    async function completeRecord(id) {
+        const { ok, data } = await API.post("/api/maintenance/complete", { id });
+        if (ok && data.success) {
+            showAlert("alert", "Maintenance marked as completed. The vehicle is available again.", "success");
+            loadRecords();
+            loadVehiclesDropdown();
+        } else {
+            showAlert("alert", "Could not complete maintenance.", "error");
+        }
+    }
+
+    // ----- delete -----
+    async function deleteRecord(id) {
+        if (!confirm("Delete maintenance record " + id + "?")) return;
+        const { ok, data } = await API.post("/api/maintenance/delete", { id });
+        if (ok && data.success) {
+            showAlert("alert", `Record ${id} deleted.`, "success");
+            loadRecords();
+            loadVehiclesDropdown();
+        } else {
+            showAlert("alert", "Could not delete record.", "error");
+        }
+    }
+
+    loadVehiclesDropdown();
+    loadRecords();
+</script>
+</body>
+</html>
