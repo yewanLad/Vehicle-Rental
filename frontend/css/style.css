@@ -3,7 +3,7 @@
 :root {
     --bg: #F2F4F7;
     --surface: #FFFFFF;
-    --ink: #0F1419;
+    --ink: #0f1119;
     --muted: #667085;
     --line: #E3E7ED;
     --accent: #2447F5;
@@ -298,6 +298,7 @@ th.id { color: var(--muted); }
     flex-direction: column;
     justify-content: space-between;
 }
+
 .auth-hero .mark { font-weight: 700; letter-spacing: -0.02em; font-size: 1.05rem; }
 .auth-hero h2 { font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.08; letter-spacing: -0.035em; max-width: 13ch; margin: 0; }
 .auth-hero p { margin: 16px 0 0; max-width: 38ch; color: #D5DCFF; }
@@ -306,7 +307,15 @@ th.id { color: var(--muted); }
 .auth-card h1 { font-size: 1.5rem; margin-bottom: 4px; }
 .auth-card .sub { color: var(--muted); font-size: .9rem; margin-bottom: 22px; }
 
-.tabs { display: flex; gap: 4px; padding: 4px; background: var(--bg); border-radius: 10px; margin-bottom: 18px; }
+.tabs { 
+    display: flex; 
+    gap: 4px; 
+    padding: 4px; 
+    background: var(--bg); 
+    border-radius: 10px; 
+    margin-bottom: 18px; 
+}
+
 .tabs button {
     flex: 1;
     background: none;
@@ -316,18 +325,8 @@ th.id { color: var(--muted); }
     color: var(--muted);
     border-radius: 7px;
 }
-.tabs button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(16, 24, 40, .1); }
-
-/* ===== Small screens ===== */
-@media (max-width: 800px) {
-    .app-shell { flex-direction: column; }
-    .sidebar { width: 100%; height: auto; position: static; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px 12px; }
-    .sidebar nav { flex-direction: row; overflow-x: auto; flex: none; }
-    .sidebar nav a { white-space: nowrap; }
-    .content { padding: 24px 16px 48px; }
-    .auth-wrap { grid-template-columns: 1fr; }
-    .auth-hero { padding: 28px; gap: 28px; }
-    .auth-hero h2 { font-size: 1.8rem; }
-}
-
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.tabs button.active {
+     background: #fff; 
+     color: var(--ink); 
+     box-shadow: 0 1px 2px rgba(16, 24, 40, .1); 
+    }

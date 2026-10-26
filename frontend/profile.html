@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Prime Ridez - My Profile</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell">
+    <div class="content">
+        <h1>My Profile</h1>
+        <div id="alert" class="alert hidden"></div>
+
+        <div class="panel">
+            <h2 style="margin-top:0">Account details</h2>
+            <form id="form-profile">
+                <div class="field-row">
+                    <div><label>Username</label><input type="text" id="p-username" required></div>
+                    <div><label>Full Name</label><input type="text" id="p-name" required></div>
+                </div>
+                <div id="customer-fields" class="field-row">
+                    <div><label>Phone</label><input type="text" id="p-phone"></div>
+                    <div><label>License Number</label><input type="text" id="p-license"></div>
+                </div>
+                <label>New Password</label>
+                <input type="password" id="p-password" placeholder="Leave blank to keep the current password">
+                <div class="btn-row">
+                    <button type="submit" class="btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="panel" id="danger-panel">
+            <h2 style="margin-top:0">Delete account</h2>
+            <p class="helper-text" style="margin-top:0">Permanently deletes your account. You can't do this while you have an active booking or unpaid fines.</p>
+            <div class="btn-row">
+                <button class="btn-danger" onclick="deleteAccount()">Delete my account</button>
+            </div>
+        </div>
+        <div class="empty-note hidden" id="admin-note">Admin accounts can only be deleted by another admin from the Users page.</div>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script>
+    renderNav("profile.html");
+    const me = Session.get();
+
+    document.getElementById("p-username").value = me.username || "";
+    document.getElementById("p-name").value = me.name || "";
+    document.getElementById("p-phone").value = me.phone || "";
+    document.getElementById("p-license").value = me.license || "";
+
+    if (me.role !== "CUSTOMER") document.getElementById("customer-fields").classList.add("hidden");
+    if (me.role === "ADMIN") {
+        document.getElementById("danger-panel").classList.add("hidden");
+        document.getElementById("admin-note").classList.remove("hidden");
+    }
+
+    document.getElementById("form-profile").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const { ok, data } = await API.post("/api/users/update", {
+            id: me.id,
+            username: document.getElementById("p-username").value.trim(),
+            name: document.getElementById("p-name").value.trim(),
+            phone: document.getElementById("p-phone").value.trim(),
+            license: document.getElementById("p-license").value.trim(),
+            password: document.getElementById("p-password").value,
+        });
+        if (ok && data.success) {
+            Session.save(data.user);
+            document.getElementById("p-password").value = "";
+            showAlert("alert", "Profile updated.", "success");
+        } else {
+            showAlert("alert", data.message || "Could not update profile.", "error");
+        }
+    });
+
+    async function deleteAccount() {
+        if (!confirm("Delete your account permanently? This cannot be undone.")) return;
+        const { ok, data } = await API.post("/api/users/delete", { id: me.id });
+        if (ok && data.success) {
+            Session.clear();
+            window.location.href = "index.html";
+        } else {
+            showAlert("alert", data.message || "Could not delete account.", "error");
+        }
+    }
+</script>
+</body>
+</html>
