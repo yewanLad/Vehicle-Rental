@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>rime Ridez - Reports</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell">
+    <div class="content">
+        <h1>Reports</h1>
+
+        <div class="panel">
+            <h2 style="margin-top:0">Summary</h2>
+            <table id="report-table">
+                <tbody id="report-rows">
+                    <tr><td>Loading…</td></tr>
+                </tbody>
+            </table>
+            <div class="btn-row">
+                <a class="btn btn-primary" id="download-link" href="#">Download full report (.txt)</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script>
+    renderNav("reports.html");
+    document.getElementById("download-link").href = API.withUser("/api/reports/download");
+
+    async function loadReport() {
+        const { ok, data } = await API.get("/api/reports");
+        if (!ok) return;
+        document.getElementById("report-rows").innerHTML = `
+            <tr><td>Total Revenue</td><td>${money(data.totalRevenue)}</td></tr>
+            <tr><td>&nbsp;&nbsp;Rental payments</td><td>${money(data.rentalRevenue)}</td></tr>
+            <tr><td>&nbsp;&nbsp;Fine payments</td><td>${money(data.fineRevenue)}</td></tr>
+            <tr><td>Refunded</td><td>${money(data.totalRefunded)}</td></tr>
+            <tr><td>Total Payments Processed</td><td>${data.totalPayments}</td></tr>
+            <tr><td>Most Rented Vehicle</td><td>${data.mostRentedVehicle ? `${esc(data.mostRentedVehicle.brand)} ${esc(data.mostRentedVehicle.model)} (${data.mostRentedCount} time(s))` : "No rentals yet"}</td></tr>
+            <tr><td>Vehicle Availability</td><td>${data.availableVehicles} / ${data.totalVehicles} available</td></tr>
+            <tr><td>Pending Maintenance</td><td>${data.pendingMaintenance} / ${data.totalMaintenanceRecords}</td></tr>
+            <tr><td>Fines Issued</td><td>${data.totalFines} (${data.pendingFines} pending, ${data.paidFines} paid, ${data.waivedFines} waived)</td></tr>
+            <tr><td>Unpaid Fines</td><td>${money(data.pendingFinesAmount)}</td></tr>
+        `;
+    }
+
+    loadReport();
+</script>
+</body>
+</html>
