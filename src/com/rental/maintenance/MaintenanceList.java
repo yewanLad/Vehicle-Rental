@@ -22,4 +22,38 @@ public class MaintenanceList {
         }
         return record;
     }
+
+    // ================= READ =================
+    public MaintenanceRecord findById(String id) {
+        if (id == null) return null;
+        for (MaintenanceRecord r : records) {
+            if (r.getId().equalsIgnoreCase(id)) return r;
+        }
+        return null;
+    }
+
+    public List<MaintenanceRecord> getAll() {
+        return records;
+    }
+
+    // ================= UPDATE =================
+    public MaintenanceRecord updateRecord(String id, String issue, double cost) {
+        MaintenanceRecord record = findById(id);
+        if (record == null) return null;
+        record.setIssueDescription(issue);
+        record.setCost(cost);
+        return record;
+    }
+    public boolean completeRecord(String id, VehicleList vehicleList) {
+        MaintenanceRecord record = findById(id);
+        if (record == null || record.getStatus().equals("COMPLETED")) {
+            return false;
+        }
+        record.setStatus("COMPLETED");
+        Vehicle v = vehicleList.findById(record.getVehicleId());
+        if (v != null) {
+            v.setAvailable(true);
+        }
+        return true;
+    }
 }
