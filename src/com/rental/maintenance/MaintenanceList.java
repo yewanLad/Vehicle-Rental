@@ -56,4 +56,32 @@ public class MaintenanceList {
         }
         return true;
     }
+
+    // ================= DELETE =================
+
+    public boolean deleteRecord(String id, VehicleList vehicleList) {
+        MaintenanceRecord record = findById(id);
+        if (record == null) return false;
+        records.remove(record);
+
+        if (record.getStatus().equals("PENDING")) {
+            boolean stillInWorkshop = false;
+            for (MaintenanceRecord other : records) {
+                if (other.getVehicleId().equalsIgnoreCase(record.getVehicleId())
+                        && other.getStatus().equals("PENDING")) {
+                    stillInWorkshop = true;
+                    break;
+                }
+            }
+            Vehicle v = vehicleList.findById(record.getVehicleId());
+            if (v != null && !stillInWorkshop) v.setAvailable(true);
+        }
+        return true;
+    }
+
+    public String generateNextId() {
+        List<String> ids = new ArrayList<>();
+        for (MaintenanceRecord r : records) ids.add(r.getId());
+        return IdGenerator.next("M", ids);
+    }
 }
