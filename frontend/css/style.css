@@ -330,3 +330,66 @@ th.id { color: var(--muted); }
      color: var(--ink); 
      box-shadow: 0 1px 2px rgba(16, 24, 40, .1); 
     }
+
+     /* ---------- vehicle cards ---------- */
+.vehicle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; margin-top: 15px; }
+.vehicle-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 2px 8px rgba(15,20,25,.04); transition: transform .18s ease, box-shadow .18s ease, border-color .18s; }
+.vehicle-card:hover { border-color: #C5CBD6; transform: translateY(-3px); box-shadow: 0 12px 28px rgba(15,20,25,.11); }
+.vehicle-open { display: block; flex: 1; width: 100%; padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.vehicle-open:focus-visible { outline-offset: -3px; }
+.vehicle-info { padding: 16px 18px 6px; }
+.vehicle-info h3 { margin: 0; font-size: 1.05rem; }
+.vehicle-info .meta { margin-top: 2px; font-size: .85rem; color: var(--muted); }
+.vehicle-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 18px 18px; }
+.vehicle-foot .price { font-size: 1.2rem; font-weight: 600; letter-spacing: -0.02em; }
+.vehicle-foot .price small { display: block; font-size: .8rem; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.vehicle-foot .btn-primary { flex: none; white-space: nowrap; }
+
+/* image area, shared by card thumbnail and detail view */
+.media { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: linear-gradient(135deg, var(--bg), #e8ecf3); }
+.media img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .35s ease; }
+.vehicle-open:hover .media img { transform: scale(1.03); }
+.chip { position: absolute; left: 10px; top: 10px; padding: 2px 10px; border-radius: 999px; background: rgba(255,255,255,.94); border: 1px solid var(--line); font-size: .78rem; font-weight: 500; }
+
+/* illustration shown until a photo is added: colour follows vehicle type */
+.ph { position: absolute; inset: 0; display: grid; place-items: center; background: var(--ph-bg); --ph-bg: var(--accent-soft); --ph-body: var(--accent); }
+.ph[data-type="VAN"] { --ph-bg: var(--ok-soft); --ph-body: var(--ok); }
+.ph[data-type="MOTORCYCLE"] { --ph-bg: var(--warn-soft); --ph-body: #C77712; }
+.ph svg { width: 86%; height: auto; }
+.ph .ground { fill: var(--ink); opacity: .09; }
+.ph .body { fill: var(--ph-body); }
+.ph .glass { fill: #fff; opacity: .92; }
+.ph .tyre { fill: var(--ink); }
+.ph .rim { fill: #fff; }
+.ph .shade { fill: var(--ink); opacity: .75; }
+.ph .line { fill: none; stroke: var(--ink); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+.media-note { position: absolute; left: 14px; bottom: 12px; font-size: .78rem; color: var(--muted); }
+
+/* ---------- detail view ---------- */
+body.modal-open { overflow: hidden; }
+.detail { position: relative; display: grid; grid-template-columns: 1.15fr 1fr; width: 100%; max-width: 880px; max-height: 92vh; overflow: auto; background: var(--surface); border-radius: 14px; }
+.detail-media { position: relative; min-height: 340px; background: var(--bg); }
+.detail-media img, .detail-media .ph { position: absolute; inset: 0; width: 100%; height: 100%; }
+.detail-media img { object-fit: cover; }
+.detail-close { position: absolute; top: 10px; right: 10px; z-index: 2; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 1.25rem; line-height: 1; color: var(--ink); }
+.detail-close:hover { background: var(--bg); }
+.detail-info { display: flex; flex-direction: column; padding: 28px 28px 24px; }
+.detail-info h2 { margin: 10px 0 0; font-size: 1.5rem; line-height: 1.15; }
+.detail-info .sub { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
+.detail-price { margin-top: 16px; font-size: 1.7rem; font-weight: 600; letter-spacing: -0.02em; }
+.detail-price small { font-size: .9rem; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.facts, .estimate { margin: 16px 0 0; padding: 0; }
+.facts div, .estimate div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
+.facts dt, .estimate dt { color: var(--muted); }
+.facts dd, .estimate dd { margin: 0; font-weight: 500; }
+.estimate-title { margin: 20px 0 0; font-size: .9rem; font-weight: 600; }
+.estimate { margin-top: 4px; }
+.detail-info .btn-row { margin-top: auto; padding-top: 22px; justify-content: flex-end; }
+@media (max-width: 720px) {
+    .detail { display: flex; flex-direction: column; }
+    .detail-media { flex: none; min-height: 0; aspect-ratio: 4 / 3; }
+    .detail-info { flex: none; padding: 20px; }
+}
+
+/* ---------- booking + receipt modals (unchanged) ---------- */
+pre.receipt-box { font-family: monospace; background: #f8f9fa; border: 1px solid #e3e7ed; padding: 14px; border-radius: 8px; white-space: pre-wrap; font-size: 0.82rem; }

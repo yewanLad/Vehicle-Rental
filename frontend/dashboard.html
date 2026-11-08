@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Prime Ridez - Dashboard</title>
     <link rel="stylesheet" href="css/style.css">
-
 </head>
 <body>
 <div class="app-shell" id="app-shell">
@@ -25,6 +24,27 @@
             <h2>Available Vehicles for Rent</h2>
             <div id="vehicle-grid" class="vehicle-grid"></div>
             <div id="no-vehicles" class="empty-note hidden">No vehicles currently available for rent.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Vehicle detail view -->
+<div id="detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="d-title" onclick="if (event.target === this) closeDetail()">
+    <div class="detail">
+        <button type="button" class="detail-close" aria-label="Close vehicle details" onclick="closeDetail()">&times;</button>
+        <div class="detail-media" id="d-media"></div>
+        <div class="detail-info">
+            <div><span class="pill pill-green">Available</span></div>
+            <h2 id="d-title"></h2>
+            <p class="sub" id="d-sub"></p>
+            <div class="detail-price"><span id="d-price"></span> <small>per day</small></div>
+            <dl class="facts" id="d-facts"></dl>
+            <p class="estimate-title">Estimated cost</p>
+            <dl class="estimate" id="d-estimate"></dl>
+            <div class="btn-row">
+                <button type="button" class="btn-secondary" style="padding: 9px 16px;" onclick="closeDetail()">Close</button>
+                <button type="button" class="btn-primary" id="d-book">Book &amp; Pay</button>
+            </div>
         </div>
     </div>
 </div>
@@ -85,6 +105,235 @@
 
 <script src="js/api.js"></script>
 <script src="js/nav.js"></script>
+<script>
+    renderNav("dashboard.html");
+    const user = Session.get();
+    let availableVehiclesList = [];
+    let selectedVehicleRate = 0;
 
+    document.getElementById("welcome-name").textContent = ", " + user.username;
+
+    if (user.role === "ADMIN") {
+        document.getElementById("role-note").textContent = "You're signed in as an admin — managing fleet operations, users, and financial reports.";
+        document.getElementById("admin-view").classList.remove("hidden");
+        loadAdminDashboard();
+    } else {
+        document.getElementById("role-note").textContent = "Browse available vehicles below, book your ride, and make payments directly.";
+        document.getElementById("customer-view").classList.remove("hidden");
+        loadCustomerDashboard();
+    }
+
+    async function loadAdminDashboard() {
+        const { ok, data } = await API.get("/api/reports");
+        if (!ok) return;
+        const mr = data.mostRentedVehicle ? data.mostRentedVehicle.brand + " " + data.mostRentedVehicle.model : "None yet";
+        document.getElementById("summary").innerHTML = `
+            <div class="stat hero"><div class="label">Total revenue</div><div class="value">${money(data.totalRevenue)}</div></div>
+            <div class="stat"><div class="label">Available vehicles</div><div class="value">${data.availableVehicles} <small>of ${data.totalVehicles}</small></div></div>
+            <div class="stat"><div class="label">Pending maintenance</div><div class="value">${data.pendingMaintenance}</div></div>
+            <div class="stat"><div class="label">Most rented</div><div class="value" style="font-size:1.2rem">${esc(mr)}</div></div>
+            <div class="stat"><div class="label">Unpaid fines</div><div class="value">${money(data.pendingFinesAmount)} <small>${data.pendingFines} fine(s)</small></div></div>
+        `;
+    }
+
+    async function loadFineNotice() {
+        const { ok, data } = await API.get("/api/fines");
+        if (!ok || !Array.isArray(data)) return;
+        const pending = data.filter(f => f.status === "PENDING");
+        if (pending.length === 0) return;
+        const total = pending.reduce((t, f) => t + f.amount, 0);
+        const el = document.getElementById("alert");
+        el.innerHTML = `You have ${pending.length} unpaid fine(s) totalling ${money(total)}. <a href="fines.html">View and pay</a>`;
+        el.className = "alert alert-error";
+    }
+
+    async function loadCustomerDashboard() {
+        loadFineNotice();
+        const { ok, data } = await API.get("/api/vehicles");
+        if (!ok) return;
+
+        availableVehiclesList = data.filter(v => v.available || v.status === "AVAILABLE");
+        const grid = document.getElementById("vehicle-grid");
+        grid.innerHTML = "";
+
+        document.getElementById("no-vehicles").classList.toggle("hidden", availableVehiclesList.length > 0);
+
+        availableVehiclesList.forEach(v => {
+            const name = `${v.brand} ${v.model}`;
+            const card = document.createElement("article");
+            card.className = "vehicle-card";
+            card.innerHTML = `
+                <button type="button" class="vehicle-open" onclick="openDetail('${esc(v.id)}')" aria-label="View details for ${esc(name)}">
+                    <div class="media">
+                        ${vehicleImage(v)}
+                        <span class="chip">${esc(typeLabel(v.type))}</span>
+                    </div>
+                    <div class="vehicle-info">
+                        <h3>${esc(name)}</h3>
+                        <div class="meta">${esc(v.year)} model</div>
+                    </div>
+                </button>
+                <div class="vehicle-foot">
+                    <div class="price">${money(rateOf(v))} <small>per day</small></div>
+                    <button type="button" class="btn-primary" onclick="openBookingModal('${esc(v.id)}')">Book & Pay</button>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    // ---------- vehicle images ----------
+    // Photos are added by an admin on the Vehicles page. Vehicles without one show an
+    // illustration in the vehicle type's colour.
+    const TYPE_LABEL = { CAR: "Car", VAN: "Van", MOTORCYCLE: "Motorcycle" };
+    const ART = {
+        CAR: `<svg viewBox="0 0 320 200" aria-hidden="true" focusable="false">
+            <ellipse class="ground" cx="160" cy="165" rx="120" ry="6"/>
+            <path class="body" d="M38 136V112Q38 100 50 98L90 92L112 66Q117 60 126 60H198Q207 60 213 66L236 94L272 100Q284 102 284 114V136Q284 140 280 140H42Q38 140 38 136Z"/>
+            <path class="glass" d="M117 91L132 69H162V91Z"/><path class="glass" d="M170 91V69H196Q200 69 203 72L220 91Z"/>
+            <circle class="tyre" cx="94" cy="140" r="23"/><circle class="rim" cx="94" cy="140" r="10"/>
+            <circle class="tyre" cx="230" cy="140" r="23"/><circle class="rim" cx="230" cy="140" r="10"/></svg>`,
+        VAN: `<svg viewBox="0 0 320 200" aria-hidden="true" focusable="false">
+            <ellipse class="ground" cx="160" cy="165" rx="124" ry="6"/>
+            <path class="body" d="M32 142V62Q32 54 40 54H206V142Z"/>
+            <path class="body" d="M206 74H234Q240 74 244 79L270 108Q280 110 284 118V142H206Z"/>
+            <path class="glass" d="M214 82H232L254 106H214Z"/>
+            <rect class="shade" x="46" y="70" width="140" height="3" rx="1.5" opacity=".25"/>
+            <circle class="tyre" cx="82" cy="142" r="22"/><circle class="rim" cx="82" cy="142" r="9"/>
+            <circle class="tyre" cx="238" cy="142" r="22"/><circle class="rim" cx="238" cy="142" r="9"/></svg>`,
+        MOTORCYCLE: `<svg viewBox="0 0 320 200" aria-hidden="true" focusable="false">
+            <ellipse class="ground" cx="160" cy="165" rx="112" ry="6"/>
+            <path class="line" d="M84 132L146 120"/><path class="line" d="M240 132L208 76"/><path class="line" d="M200 70L224 62"/>
+            <circle class="tyre" cx="84" cy="132" r="31"/><circle class="rim" cx="84" cy="132" r="22"/><circle class="tyre" cx="84" cy="132" r="5"/>
+            <circle class="tyre" cx="240" cy="132" r="31"/><circle class="rim" cx="240" cy="132" r="22"/><circle class="tyre" cx="240" cy="132" r="5"/>
+            <rect class="shade" x="138" y="104" width="52" height="30" rx="6"/>
+            <path class="body" d="M142 92Q150 70 188 72L204 84L196 98L146 102Z"/>
+            <path class="body" d="M92 96Q118 84 146 92L146 104L98 106Z"/>
+            <circle class="body" cx="214" cy="86" r="7"/></svg>`
+    };
+
+    function typeLabel(type) { return TYPE_LABEL[type] || type; }
+    function rateOf(v) { return v.costPerDay || v.dailyRate; }   // what the customer is actually charged per day
+    function placeholder(type) { return `<div class="ph" data-type="${esc(type)}">${ART[type] || ART.CAR}</div>`; }
+
+    // The server reports the photo's URL (v.image) when one exists; otherwise the illustration is used.
+    function vehicleImage(v) {
+        if (!v.image) return placeholder(v.type);
+        return `<img src="${esc(v.image)}" alt="${esc(v.brand)} ${esc(v.model)}" loading="lazy"
+                     data-type="${esc(v.type)}" onerror="imageFallback(this)">`;
+    }
+
+    // If a photo file can't be loaded, show the illustration instead.
+    function imageFallback(img) {
+        img.onerror = null;
+        const inDetail = !!img.closest(".detail-media");
+        img.insertAdjacentHTML("afterend", placeholder(img.dataset.type) +
+            (inDetail ? '<span class="media-note">Photo not added yet</span>' : ""));
+        img.remove();
+    }
+
+    // ---------- vehicle detail view ----------
+    let detailOpener = null;
+
+    function openDetail(vehicleId) {
+        const v = availableVehiclesList.find(x => x.id === vehicleId);
+        if (!v) return;
+        detailOpener = document.activeElement;
+        const rate = rateOf(v);
+
+        document.getElementById("d-media").innerHTML = vehicleImage(v) +
+            (v.image ? "" : '<span class="media-note">Photo not added yet</span>');
+        document.getElementById("d-title").textContent = `${v.brand} ${v.model}`;
+        document.getElementById("d-sub").textContent = `${v.year} ${typeLabel(v.type).toLowerCase()}`;
+        document.getElementById("d-price").textContent = money(rate);
+
+        const facts = [["Type", typeLabel(v.type)], ["Year", v.year], ["Vehicle ID", v.id]];
+        if (Math.abs(rate - v.dailyRate) > 0.004) facts.push(["Base rate", money(v.dailyRate) + " per day"]);
+        document.getElementById("d-facts").innerHTML =
+            facts.map(([k, val]) => `<div><dt>${esc(k)}</dt><dd>${esc(val)}</dd></div>`).join("");
+        document.getElementById("d-estimate").innerHTML =
+            [1, 3, 7].map(d => `<div><dt>${d} ${d === 1 ? "day" : "days"}</dt><dd>${money(rate * d)}</dd></div>`).join("");
+
+        document.getElementById("d-book").onclick = () => { closeDetail(false); openBookingModal(v.id); };
+        document.getElementById("detail-modal").classList.remove("hidden");
+        document.body.classList.add("modal-open");
+        document.querySelector("#detail-modal .detail-close").focus();
+    }
+
+    function closeDetail(restoreFocus = true) {
+        document.getElementById("detail-modal").classList.add("hidden");
+        document.body.classList.remove("modal-open");
+        if (restoreFocus && detailOpener) detailOpener.focus();
+    }
+
+    // Esc closes the detail view; Tab stays inside it while open.
+    document.addEventListener("keydown", (e) => {
+        const modal = document.getElementById("detail-modal");
+        if (modal.classList.contains("hidden")) return;
+        if (e.key === "Escape") { closeDetail(); return; }
+        if (e.key !== "Tab") return;
+        const items = [...modal.querySelectorAll("button:not([disabled])")];
+        const first = items[0], last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+
+    function openBookingModal(vehicleId) {
+        const v = availableVehiclesList.find(x => x.id === vehicleId);
+        if (!v) return;
+
+        selectedVehicleRate = rateOf(v);
+        document.getElementById("modal-vehicle-id").value = vehicleId;
+        document.getElementById("modal-vehicle-title").textContent = `Book ${v.brand} ${v.model}`;
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById("b-start-date").min = today;
+        document.getElementById("b-start-date").value = today;
+        document.getElementById("b-days").value = 1;
+
+        updateCalculatedTotal();
+        document.getElementById("booking-modal").classList.remove("hidden");
+    }
+
+    function updateCalculatedTotal() {
+        const days = parseInt(document.getElementById("b-days").value) || 1;
+        document.getElementById("calculated-total").textContent = `Rs.${(selectedVehicleRate * days).toFixed(2)}`;
+    }
+
+    function toggleCardField(method) {
+        document.getElementById("card-field").classList.toggle("hidden", method !== "Card");
+    }
+
+    function closeBookingModal() {
+        document.getElementById("booking-modal").classList.add("hidden");
+    }
+
+    document.getElementById("form-customer-book").addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const payload = {
+            vehicleId: document.getElementById("modal-vehicle-id").value,
+            startDate: document.getElementById("b-start-date").value,
+            days: document.getElementById("b-days").value,
+            method: document.getElementById("p-method").value,
+            cardNumber: document.getElementById("p-card-no").value
+        };
+
+        // Backend Java handles booking creation, payment execution, and text receipt generation
+        const { ok, data } = await API.post("/api/bookings", payload);
+        if (ok && data.receipt) {
+            closeBookingModal();
+            document.getElementById("receipt-content").textContent = data.receipt;
+            document.getElementById("receipt-modal").classList.remove("hidden");
+            loadCustomerDashboard();
+        } else {
+            closeBookingModal();
+            showAlert("alert", data.message || "Failed to process booking and payment.", "error");
+        }
+    });
+
+    function closeReceiptModal() {
+        document.getElementById("receipt-modal").classList.add("hidden");
+    }
+</script>
 </body>
 </html>
