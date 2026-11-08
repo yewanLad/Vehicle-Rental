@@ -41,6 +41,9 @@
                 </div>
                 <label>Daily Rate (Rs.)</label>
                 <input type="number" step="0.01" min="0.01" id="v-rate" required>
+                <label>Vehicle photo (optional)</label>
+                <input type="file" id="v-photo" accept="image/jpeg,image/png,image/webp">
+                <div class="helper-text">JPG, PNG or WebP, up to 2 MB.</div>
                 <div class="btn-row">
                     <button type="submit" class="btn-primary">Add vehicle</button>
                 </div>
@@ -51,10 +54,10 @@
             <h2 style="margin-top:0">Fleet</h2>
             <table id="vehicle-table">
                 <thead>
-                    <tr>
-                        <th class="id">ID</th><th>Type</th><th>Brand / Model</th><th>Year</th>
-                        <th>Daily Rate</th><th>Status</th><th></th>
-                    </tr>
+                <tr>
+                    <th class="id">ID</th><th>Type</th><th>Brand / Model</th><th>Year</th>
+                    <th>Daily Rate</th><th>Status</th><th></th>
+                </tr>
                 </thead>
                 <tbody id="vehicle-rows"></tbody>
             </table>
@@ -113,6 +116,8 @@
                 <td>${money(v.dailyRate)}</td>
                 <td><span class="pill ${v.available ? "pill-green" : "pill-red"}">${v.available ? "Available" : "Not available"}</span></td>
                 <td>${isAdmin ? `<div class="actions">
+                        <button class="btn-secondary" onclick="choosePhoto('${esc(v.id)}')">${v.image ? "Change photo" : "Add photo"}</button>
+                        ${v.image ? `<button class="btn-danger" onclick="removePhoto('${esc(v.id)}')">Remove photo</button>` : ""}
                         <button class="btn-secondary" onclick="openEdit('${esc(v.id)}')">Edit</button>
                         <button class="btn-danger" onclick="removeVehicle('${esc(v.id)}')">Remove</button>
                     </div>` : ""}</td>
@@ -132,7 +137,13 @@
         };
         const { ok, data } = await API.post("/api/vehicles", payload);
         if (ok && data.success) {
-            showAlert("alert", `Added ${data.vehicle.brand} ${data.vehicle.model} (${data.vehicle.id}).`, "success");
+            const photo = document.getElementById("v-photo").files[0];
+            let photoError = "";
+            if (photo) {
+                const upload = await API.upload(`/api/vehicles/photo?vehicleId=${encodeURIComponent(data.vehicle.id)}`, photo);
+                if (!upload.ok) photoError = upload.data.message || "upload failed";
+            }
+            showAlert("alert", photoError ? `Vehicle created, but its photo was not saved: ${photoError}` : `Added ${data.vehicle.brand} ${data.vehicle.model} (${data.vehicle.id}).`, photoError ? "error" : "success");
             e.target.reset();
             loadVehicles();
         } else {
@@ -150,6 +161,29 @@
         document.getElementById("e-year").value = v.year;
         document.getElementById("e-rate").value = v.dailyRate;
         openModal("edit-modal");
+    }
+
+    let photoVehicleId = "";
+    function choosePhoto(id) {
+        photoVehicleId = id;
+        const input = document.getElementById("v-photo");
+        input.value = "";
+        input.onchange = async () => {
+            const file = input.files[0];
+            if (!file) return;
+            if (file.size > 2 * 1024 * 1024) { showAlert("alert", "Photo must be 2 MB or smaller.", "error"); return; }
+            const { ok, data } = await API.upload(`/api/vehicles/photo?vehicleId=${encodeURIComponent(photoVehicleId)}`, file);
+            if (ok && data.success) { showAlert("alert", `Photo updated for ${photoVehicleId}.`, "success"); loadVehicles(); }
+            else showAlert("alert", data.message || "Could not save photo.", "error");
+        };
+        input.click();
+    }
+
+    async function removePhoto(id) {
+        if (!confirm(`Remove the photo for ${id}?`)) return;
+        const { ok, data } = await API.post(`/api/vehicles/photo/remove?vehicleId=${encodeURIComponent(id)}`, {});
+        if (ok && data.success) { showAlert("alert", `Photo removed for ${id}.`, "success"); loadVehicles(); }
+        else showAlert("alert", data.message || "Could not remove photo.", "error");
     }
 
     document.getElementById("form-edit").addEventListener("submit", async (e) => {
