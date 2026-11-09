@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prime Ridez - Fines</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell" id="app-shell">
+  <div class="content">
+    <h1>Fines &amp; Damage Charges</h1>
+    <div id="alert" class="alert hidden"></div>
+
+    <div class="stats" id="fine-stats"></div>
+
+    <!-- Admin: add a fine manually -->
+    <div class="panel hidden" id="add-panel">
+      <h2 style="margin-top:0">Add a fine</h2>
+      <form id="form-add">
+        <div class="field-row">
+          <div>
+            <label>Booking ID</label>
+            <input type="text" id="f-rental" placeholder="e.g. R001" required>
+          </div>
+          <div>
+            <label>Reason</label>
+            <select id="f-reason">
+              <option value="DAMAGE">Damage</option>
+              <option value="LATE">Late return</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+          <div>
+            <label>Amount (Rs.)</label>
+            <input type="number" step="0.01" min="0.01" id="f-amount" required>
+          </div>
+        </div>
+        <label>Description</label>
+        <input type="text" id="f-desc" placeholder="e.g. Cracked windscreen">
+        <div class="helper-text">Late-return fines are created automatically when a vehicle is returned after its end date.</div>
+        <div class="btn-row">
+          <button type="submit" class="btn-primary">Add fine</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <div class="toolbar">
+        <h2 id="table-title">All Fines</h2>
+        <select id="status-filter" onchange="renderFines()">
+          <option value="ALL">All Statuses</option>
+          <option value="PENDING">Pending</option>
+          <option value="PAID">Paid</option>
+          <option value="WAIVED">Waived</option>
+        </select>
+      </div>
+      <table>
+        <thead>
+        <tr>
+          <th class="id">Fine ID</th>
+          <th class="id">Booking</th>
+          <th>Customer</th>
+          <th>Reason</th>
+          <th>Details</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+        </thead>
+        <tbody id="fine-rows"></tbody>
+      </table>
+      <div id="empty-note" class="empty-note hidden">No fines found.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit fine (admin) -->
+<div id="edit-modal" class="modal-overlay hidden">
+  <div class="modal-body">
+    <h2 id="edit-title">Edit fine</h2>
+    <form id="form-edit">
+      <input type="hidden" id="e-id">
+      <div class="field-row">
+        <div>
+          <label>Reason</label>
+          <select id="e-reason">
+            <option value="DAMAGE">Damage</option>
+            <option value="LATE">Late return</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div>
+          <label>Amount (Rs.)</label>
+          <input type="number" step="0.01" min="0.01" id="e-amount" required>
+        </div>
+      </div>
+      <label>Description</label>
+      <input type="text" id="e-desc">
+      <div class="btn-row">
+        <button type="button" class="btn-secondary" onclick="closeModal('edit-modal')">Cancel</button>
+        <button type="submit" class="btn-primary">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Pay fine -->
+<div id="pay-modal" class="modal-overlay hidden">
+  <div class="modal-body">
+    <h2 id="pay-title">Pay fine</h2>
+    <form id="form-pay">
+      <input type="hidden" id="p-id">
+      <div style="margin: 5px 0 15px; padding: 12px; background: var(--bg); border-radius: 8px;">
+        <span class="helper-text">Amount due:</span>
+        <div id="p-amount" style="font-size: 1.4rem; font-weight: 700;"></div>
+      </div>
+      <label>Payment Method</label>
+      <select id="p-method" onchange="document.getElementById('p-card-wrap').classList.toggle('hidden', this.value !== 'Card')">
+        <option value="Card">Card</option>
+        <option value="Cash">Cash</option>
+        <option value="Bank Transfer">Bank Transfer</option>
+      </select>
+      <div id="p-card-wrap">
+        <label>Card Number (Simulated)</label>
+        <input type="text" id="p-card" placeholder="4111 1111 1111 1234">
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn-secondary" onclick="closeModal('pay-modal')">Cancel</button>
+        <button type="submit" class="btn-primary">Pay now</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script>
+  renderNav("fines.html");
+  const user = Session.get();
+  const isAdmin = user.role === "ADMIN";
+  let fines = [];
+
+  if (isAdmin) document.getElementById("add-panel").classList.remove("hidden");
+  else document.getElementById("table-title").textContent = "My Fines";
+
+  const PILL = { PENDING: "pill-amber", PAID: "pill-green", WAIVED: "pill-muted" };
+  const REASON = { LATE: "Late return", DAMAGE: "Damage", OTHER: "Other" };
+
+  async function loadFines() {
+    const { ok, data } = await API.get("/api/fines");
+    if (!ok) return;
+    fines = data;
+    renderStats();
+    renderFines();
+  }
+
+  function sum(status) {
+    return fines.filter(f => f.status === status).reduce((t, f) => t + f.amount, 0);
+  }
+  function count(status) { return fines.filter(f => f.status === status).length; }
+
+  function renderStats() {
+    document.getElementById("fine-stats").innerHTML = `
+            <div class="stat"><div class="label">Pending</div><div class="value">${money(sum("PENDING"))} <small>${count("PENDING")} fine(s)</small></div></div>
+            <div class="stat"><div class="label">Paid</div><div class="value">${money(sum("PAID"))} <small>${count("PAID")} fine(s)</small></div></div>
+            <div class="stat"><div class="label">Waived</div><div class="value">${money(sum("WAIVED"))} <small>${count("WAIVED")} fine(s)</small></div></div>
+        `;
+  }
+
+  function actionsFor(f) {
+    const id = esc(f.id);
+    const b = [];
+    if (f.status === "PENDING") {
+      b.push(`<button class="btn-primary" onclick="openPay('${id}')">Pay</button>`);
+      if (isAdmin) {
+        b.push(`<button class="btn-secondary" onclick="openEdit('${id}')">Edit</button>`);
+        b.push(`<button class="btn-warn" onclick="waiveFine('${id}')">Waive</button>`);
+      }
+    }
+    if (isAdmin && f.status !== "PAID") {
+      b.push(`<button class="btn-danger" onclick="deleteFine('${id}')">Delete</button>`);
+    }
+    return `<div class="actions">${b.join("")}</div>`;
+  }
+
+  function renderFines() {
+    const filter = document.getElementById("status-filter").value;
+    const rows = document.getElementById("fine-rows");
+    rows.innerHTML = "";
+    const filtered = filter === "ALL" ? fines : fines.filter(f => f.status === filter);
+    document.getElementById("empty-note").classList.toggle("hidden", filtered.length > 0);
+
+    filtered.forEach(f => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+                <td class="id">${esc(f.id)}</td>
+                <td class="id">${esc(f.rentalId)}</td>
+                <td>${esc(f.customerName || f.customerId || "—")}<div class="helper-text" style="margin-top:0">${esc(f.vehicleName)}</div></td>
+                <td><span class="pill ${f.reason === "DAMAGE" ? "pill-red" : "pill-amber"}">${esc(REASON[f.reason] || f.reason)}</span></td>
+                <td>${esc(f.description) || "—"}</td>
+                <td><strong>${money(f.amount)}</strong></td>
+                <td><span class="pill ${PILL[f.status] || "pill-muted"}">${esc(f.status)}</span></td>
+                <td>${actionsFor(f)}</td>
+            `;
+      rows.appendChild(tr);
+    });
+  }
+
+  // ----- create -----
+  document.getElementById("form-add").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const { ok, data } = await API.post("/api/fines", {
+      rentalId: document.getElementById("f-rental").value.trim(),
+      reason: document.getElementById("f-reason").value,
+      amount: document.getElementById("f-amount").value,
+      description: document.getElementById("f-desc").value.trim(),
+    });
+    if (ok && data.success) {
+      showAlert("alert", `Fine ${data.fine.id} added for booking ${data.fine.rentalId}.`, "success");
+      e.target.reset();
+      loadFines();
+    } else {
+      showAlert("alert", data.message || "Could not add fine.", "error");
+    }
+  });
+
+  // ----- update -----
+  function openEdit(id) {
+    const f = fines.find(x => x.id === id);
+    if (!f) return;
+    document.getElementById("edit-title").textContent = `Edit fine ${f.id}`;
+    document.getElementById("e-id").value = f.id;
+    document.getElementById("e-reason").value = f.reason;
+    document.getElementById("e-amount").value = f.amount;
+    document.getElementById("e-desc").value = f.description;
+    openModal("edit-modal");
+  }
+
+  document.getElementById("form-edit").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const { ok, data } = await API.post("/api/fines/update", {
+      id: document.getElementById("e-id").value,
+      reason: document.getElementById("e-reason").value,
+      amount: document.getElementById("e-amount").value,
+      description: document.getElementById("e-desc").value.trim(),
+    });
+    closeModal("edit-modal");
+    if (ok && data.success) {
+      showAlert("alert", `Fine ${data.fine.id} updated.`, "success");
+      loadFines();
+    } else {
+      showAlert("alert", data.message || "Could not update fine.", "error");
+    }
+  });
+
+  async function waiveFine(id) {
+    if (!confirm("Waive fine " + id + "? The customer will no longer have to pay it.")) return;
+    const { ok, data } = await API.post("/api/fines/waive", { id });
+    if (ok && data.success) {
+      showAlert("alert", `Fine ${id} waived.`, "success");
+      loadFines();
+    } else {
+      showAlert("alert", data.message || "Could not waive fine.", "error");
+    }
+  }
+
+  // ----- pay -----
+  function openPay(id) {
+    const f = fines.find(x => x.id === id);
+    if (!f) return;
+    document.getElementById("pay-title").textContent = `Pay fine ${f.id}`;
+    document.getElementById("p-id").value = f.id;
+    document.getElementById("p-amount").textContent = money(f.amount);
+    document.getElementById("p-card").value = "";
+    document.getElementById("p-method").value = "Card";
+    document.getElementById("p-card-wrap").classList.remove("hidden");
+    openModal("pay-modal");
+  }
+
+  document.getElementById("form-pay").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const method = document.getElementById("p-method").value;
+    const card = document.getElementById("p-card").value.replace(/\s/g, "");
+    if (method === "Card" && card.length < 12) {
+      closeModal("pay-modal");
+      showAlert("alert", "Please enter a valid card number.", "error");
+      return;
+    }
+    const { ok, data } = await API.post("/api/fines/pay", {
+      id: document.getElementById("p-id").value,
+      method,
+    });
+    closeModal("pay-modal");
+    if (ok && data.success) {
+      showAlert("alert", `Fine ${data.fine.id} paid (payment ${data.payment.id}). A receipt is available on the Payments page.`, "success");
+      loadFines();
+    } else {
+      showAlert("alert", data.message || "Could not pay fine.", "error");
+    }
+  });
+
+  // ----- delete -----
+  async function deleteFine(id) {
+    if (!confirm("Delete fine " + id + "?")) return;
+    const { ok, data } = await API.post("/api/fines/delete", { id });
+    if (ok && data.success) {
+      showAlert("alert", `Fine ${id} deleted.`, "success");
+      loadFines();
+    } else {
+      showAlert("alert", data.message || "Could not delete fine.", "error");
+    }
+  }
+
+  loadFines();
+</script>
+</body>
+</html>
