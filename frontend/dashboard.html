@@ -110,6 +110,7 @@
     const user = Session.get();
     let availableVehiclesList = [];
     let selectedVehicleRate = 0;
+    let vehicleSnapshot = "";
 
     document.getElementById("welcome-name").textContent = ", " + user.username;
 
@@ -120,7 +121,9 @@
     } else {
         document.getElementById("role-note").textContent = "Browse available vehicles below, book your ride, and make payments directly.";
         document.getElementById("customer-view").classList.remove("hidden");
+        loadFineNotice();
         loadCustomerDashboard();
+        window.setInterval(loadCustomerDashboard, 12000);
     }
 
     async function loadAdminDashboard() {
@@ -148,9 +151,11 @@
     }
 
     async function loadCustomerDashboard() {
-        loadFineNotice();
         const { ok, data } = await API.get("/api/vehicles");
         if (!ok) return;
+        const snapshot = JSON.stringify(data);
+        if (snapshot === vehicleSnapshot) return;
+        vehicleSnapshot = snapshot;
 
         availableVehiclesList = data.filter(v => v.available || v.status === "AVAILABLE");
         const grid = document.getElementById("vehicle-grid");
@@ -216,10 +221,10 @@
     function rateOf(v) { return v.costPerDay || v.dailyRate; }   // what the customer is actually charged per day
     function placeholder(type) { return `<div class="ph" data-type="${esc(type)}">${ART[type] || ART.CAR}</div>`; }
 
-    // The server reports the photo's URL (v.image) when one exists; otherwise the illustration is used.
+    // The server reports the saved photo URL; vehicles without photos use a simple illustration.
     function vehicleImage(v) {
-        if (!v.image) return placeholder(v.type);
-        return `<img src="${esc(v.image)}" alt="${esc(v.brand)} ${esc(v.model)}" loading="lazy"
+        if (!v.photoUrl) return placeholder(v.type);
+        return `<img src="${esc(v.photoUrl)}" alt="${esc(v.brand)} ${esc(v.model)}" loading="lazy"
                      data-type="${esc(v.type)}" onerror="imageFallback(this)">`;
     }
 
@@ -242,7 +247,7 @@
         const rate = rateOf(v);
 
         document.getElementById("d-media").innerHTML = vehicleImage(v) +
-            (v.image ? "" : '<span class="media-note">Photo not added yet</span>');
+            (v.photoUrl ? "" : '<span class="media-note">Photo not added yet</span>');
         document.getElementById("d-title").textContent = `${v.brand} ${v.model}`;
         document.getElementById("d-sub").textContent = `${v.year} ${typeLabel(v.type).toLowerCase()}`;
         document.getElementById("d-price").textContent = money(rate);
