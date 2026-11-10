@@ -41,9 +41,8 @@
                 </div>
                 <label>Daily Rate (Rs.)</label>
                 <input type="number" step="0.01" min="0.01" id="v-rate" required>
-                <label>Vehicle photo (optional)</label>
-                <input type="file" id="v-photo" accept="image/jpeg,image/png,image/webp">
-                <div class="helper-text">JPG, PNG or WebP, up to 2 MB.</div>
+                <label>Vehicle photo <span class="helper-text">(optional, JPG/PNG/GIF/WebP, up to 5 MB)</span></label>
+                <input type="file" id="v-photo" accept="image/jpeg,image/png,image/gif,image/webp">
                 <div class="btn-row">
                     <button type="submit" class="btn-primary">Add vehicle</button>
                 </div>
@@ -55,7 +54,7 @@
             <table id="vehicle-table">
                 <thead>
                 <tr>
-                    <th class="id">ID</th><th>Type</th><th>Brand / Model</th><th>Year</th>
+                    <th>Photo</th><th class="id">ID</th><th>Type</th><th>Brand / Model</th><th>Year</th>
                     <th>Daily Rate</th><th>Status</th><th></th>
                 </tr>
                 </thead>
@@ -76,6 +75,7 @@
                 <div><label>Brand</label><input type="text" id="e-brand" required></div>
                 <div><label>Model</label><input type="text" id="e-model" required></div>
             </div>
+            <label>Vehicle photo</label><input type="file" id="e-photo" accept="image/jpeg,image/png,image/gif,image/webp">
             <div class="field-row">
                 <div><label>Year</label><input type="number" id="e-year" required></div>
                 <div><label>Daily Rate (Rs.)</label><input type="number" step="0.01" min="0.01" id="e-rate" required></div>
@@ -96,6 +96,11 @@
     const user = Session.get();
     const isAdmin = user.role === "ADMIN";
     let vehicles = [];
+    const photoData = file => new Promise((resolve, reject) => {
+        if (!file) return resolve("");
+        if (file.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(file.type)) return reject(new Error("Choose a JPG, PNG, GIF or WebP image under 5 MB."));
+        const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file);
+    });
     if (isAdmin) document.getElementById("add-panel").classList.remove("hidden");
 
     async function loadVehicles() {
@@ -109,6 +114,7 @@
         data.forEach(v => {
             const tr = document.createElement("tr");
             tr.innerHTML = `
+                <td>${v.photoUrl ? `<img class="fleet-thumb" src="${esc(v.photoUrl)}" alt="${esc(v.brand)} ${esc(v.model)}">` : `<span class="fleet-thumb-placeholder">No photo</span>`}</td>
                 <td class="id">${esc(v.id)}</td>
                 <td>${esc(v.type)}</td>
                 <td>${esc(v.brand)} ${esc(v.model)}</td>
@@ -116,8 +122,8 @@
                 <td>${money(v.dailyRate)}</td>
                 <td><span class="pill ${v.available ? "pill-green" : "pill-red"}">${v.available ? "Available" : "Not available"}</span></td>
                 <td>${isAdmin ? `<div class="actions">
-                        <button class="btn-secondary" onclick="choosePhoto('${esc(v.id)}')">${v.image ? "Change photo" : "Add photo"}</button>
-                        ${v.image ? `<button class="btn-danger" onclick="removePhoto('${esc(v.id)}')">Remove photo</button>` : ""}
+                        <label class="btn-secondary photo-button">${v.photoUrl ? "Change photo" : "Upload photo"}<input type="file" accept="image/jpeg,image/png,image/gif,image/webp" onchange="uploadPhoto('${esc(v.id)}', this.files[0])"></label>
+                        ${v.photoUrl ? `<button class="btn-danger" onclick="removePhoto('${esc(v.id)}')">Remove photo</button>` : ""}
                         <button class="btn-secondary" onclick="openEdit('${esc(v.id)}')">Edit</button>
                         <button class="btn-danger" onclick="removeVehicle('${esc(v.id)}')">Remove</button>
                     </div>` : ""}</td>
@@ -128,22 +134,20 @@
 
     document.getElementById("form-add").addEventListener("submit", async (e) => {
         e.preventDefault();
+        let encodedPhoto;
+        try { encodedPhoto = await photoData(document.getElementById("v-photo").files[0]); }
+        catch (err) { showAlert("alert", err.message, "error"); return; }
         const payload = {
             type: document.getElementById("v-type").value,
             brand: document.getElementById("v-brand").value.trim(),
             model: document.getElementById("v-model").value.trim(),
             year: document.getElementById("v-year").value,
             dailyRate: document.getElementById("v-rate").value,
+            photoData: encodedPhoto,
         };
         const { ok, data } = await API.post("/api/vehicles", payload);
         if (ok && data.success) {
-            const photo = document.getElementById("v-photo").files[0];
-            let photoError = "";
-            if (photo) {
-                const upload = await API.upload(`/api/vehicles/photo?vehicleId=${encodeURIComponent(data.vehicle.id)}`, photo);
-                if (!upload.ok) photoError = upload.data.message || "upload failed";
-            }
-            showAlert("alert", photoError ? `Vehicle created, but its photo was not saved: ${photoError}` : `Added ${data.vehicle.brand} ${data.vehicle.model} (${data.vehicle.id}).`, photoError ? "error" : "success");
+            showAlert("alert", `Added ${data.vehicle.brand} ${data.vehicle.model} (${data.vehicle.id}).`, "success");
             e.target.reset();
             loadVehicles();
         } else {
@@ -160,34 +164,20 @@
         document.getElementById("e-model").value = v.model;
         document.getElementById("e-year").value = v.year;
         document.getElementById("e-rate").value = v.dailyRate;
+        document.getElementById("e-photo").value = "";
         openModal("edit-modal");
-    }
-
-    let photoVehicleId = "";
-    function choosePhoto(id) {
-        photoVehicleId = id;
-        const input = document.getElementById("v-photo");
-        input.value = "";
-        input.onchange = async () => {
-            const file = input.files[0];
-            if (!file) return;
-            if (file.size > 2 * 1024 * 1024) { showAlert("alert", "Photo must be 2 MB or smaller.", "error"); return; }
-            const { ok, data } = await API.upload(`/api/vehicles/photo?vehicleId=${encodeURIComponent(photoVehicleId)}`, file);
-            if (ok && data.success) { showAlert("alert", `Photo updated for ${photoVehicleId}.`, "success"); loadVehicles(); }
-            else showAlert("alert", data.message || "Could not save photo.", "error");
-        };
-        input.click();
-    }
-
-    async function removePhoto(id) {
-        if (!confirm(`Remove the photo for ${id}?`)) return;
-        const { ok, data } = await API.post(`/api/vehicles/photo/remove?vehicleId=${encodeURIComponent(id)}`, {});
-        if (ok && data.success) { showAlert("alert", `Photo removed for ${id}.`, "success"); loadVehicles(); }
-        else showAlert("alert", data.message || "Could not remove photo.", "error");
     }
 
     document.getElementById("form-edit").addEventListener("submit", async (e) => {
         e.preventDefault();
+        const newPhoto = document.getElementById("e-photo").files[0];
+        if (newPhoto) {
+            try {
+                const photo = await photoData(newPhoto);
+                const result = await API.post("/api/vehicles/photo", { id: document.getElementById("e-id").value, photoData: photo });
+                if (!result.ok) { showAlert("alert", result.data.message || "Could not update photo.", "error"); return; }
+            } catch (err) { showAlert("alert", err.message, "error"); return; }
+        }
         const { ok, data } = await API.post("/api/vehicles/update", {
             id: document.getElementById("e-id").value,
             brand: document.getElementById("e-brand").value.trim(),
@@ -203,6 +193,22 @@
             showAlert("alert", data.message || "Could not update vehicle.", "error");
         }
     });
+
+    async function uploadPhoto(id, file) {
+        if (!file) return;
+        try {
+            const result = await API.post("/api/vehicles/photo", { id, photoData: await photoData(file) });
+            if (!result.ok) showAlert("alert", result.data.message || "Could not update photo.", "error");
+            else { showAlert("alert", "Vehicle photo updated.", "success"); loadVehicles(); }
+        } catch (err) { showAlert("alert", err.message, "error"); }
+    }
+
+    async function removePhoto(id) {
+        if (!confirm("Remove the photo for " + id + "?")) return;
+        const { ok, data } = await API.post("/api/vehicles/photo", { id });
+        if (ok) { showAlert("alert", "Vehicle photo removed.", "success"); loadVehicles(); }
+        else showAlert("alert", data.message || "Could not remove photo.", "error");
+    }
 
     async function removeVehicle(id) {
         if (!confirm("Remove vehicle " + id + "?")) return;
