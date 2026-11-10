@@ -96,6 +96,7 @@ public class VehicleList {
                     default:
                         v = new Car(id, brand, model, year, dailyRate, available);
                 }
+                if (parts.length > 7) v.setPhotoUrl(parts[7]);
                 vehicles.add(v);
             }
         } catch (IOException e) {
