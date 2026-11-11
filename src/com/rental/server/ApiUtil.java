@@ -12,6 +12,7 @@ import java.util.Map;
 
 import com.rental.user.User;
 
+/** HTTP plumbing and access-control helpers shared by every handler. */
 final class ApiUtil {
 
     private ApiUtil() { }
