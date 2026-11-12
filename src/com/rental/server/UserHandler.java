@@ -13,7 +13,14 @@ import com.rental.user.*;
 import static com.rental.server.ApiUtil.*;
 import static com.rental.server.AppData.*;
 
-
+/**
+ * USER MODULE endpoints.
+ *   POST /api/login
+ *   POST /api/register/customer | /api/register/admin      (create)
+ *   GET  /api/users                                         (read, admin)
+ *   POST /api/users/update                                  (update: admin any user, others only themselves)
+ *   POST /api/users/delete                                  (delete: admin any other user, customer own account)
+ */
 final class UserHandler {
 
     private UserHandler() { }
@@ -166,12 +173,12 @@ final class UserHandler {
     static String userJson(User u) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\"id\":\"").append(esc(u.getId()))
-          .append("\",\"username\":\"").append(esc(u.getUsername()))
-          .append("\",\"role\":\"").append(esc(u.getRole())).append("\"");
+                .append("\",\"username\":\"").append(esc(u.getUsername()))
+                .append("\",\"role\":\"").append(esc(u.getRole())).append("\"");
         if (u instanceof Customer c) {
             sb.append(",\"name\":\"").append(esc(c.getName()))
-              .append("\",\"phone\":\"").append(esc(c.getPhone()))
-              .append("\",\"license\":\"").append(esc(c.getLicenseNumber())).append("\"");
+                    .append("\",\"phone\":\"").append(esc(c.getPhone()))
+                    .append("\",\"license\":\"").append(esc(c.getLicenseNumber())).append("\"");
         } else if (u instanceof Admin a) {
             sb.append(",\"name\":\"").append(esc(a.getName())).append("\"");
         }
