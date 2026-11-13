@@ -1,5 +1,5 @@
 
-const ADMIN_ONLY_PAGES = ["users.html", "maintenance.html"];
+const ADMIN_ONLY_PAGES = ["users.html", "maintenance.html", "reports.html"];
 
 function renderNav(activePage) {
     const user = Session.requireLogin();
@@ -15,9 +15,11 @@ function renderNav(activePage) {
         { page: "vehicles.html", label: "Vehicles" },
         { page: "bookings.html", label: "Bookings" },
         { page: "payments.html", label: "Payments" },
+        { page: "fines.html", label: "Fines" },
         { page: "maintenance.html", label: "Maintenance", adminOnly: true },
         { page: "users.html", label: "Users", adminOnly: true },
-        { page: "reports.html", label: "Reports" },
+        { page: "reports.html", label: "Reports", adminOnly: true },
+        { page: "profile.html", label: "My Profile" },
     ];
 
     const navHtml = links
@@ -28,8 +30,8 @@ function renderNav(activePage) {
     const shell = document.getElementById("app-shell");
     shell.insertAdjacentHTML("afterbegin", `
         <div class="sidebar">
-            <div class="brand">Rental System</div>
-            <div class="session"><strong>${user.username}</strong><br>${user.role}</div>
+            <div class="brand">Prime Ridez</div>
+            <div class="session"><strong>${esc(user.username)}</strong><br>${esc(user.role)}</div>
             <nav>${navHtml}</nav>
             <button class="logout" onclick="doLogout()">Log out</button>
         </div>

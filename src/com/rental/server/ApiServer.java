@@ -9,7 +9,17 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-
+/**
+ * Entry point. Only starts the server and registers routes; the real work
+ * lives in one handler class per module:
+ *
+ *   UserHandler, VehicleHandler, BookingHandler,
+ *   PaymentHandler, MaintenanceHandler, FineHandler  (+ ReportHandler)
+ *
+ * Shared plumbing is in ApiUtil, shared data in AppData.
+ * Also serves the static frontend from the "frontend/" folder, so the whole
+ * app runs from one process at http://localhost:8080 with no CORS issues.
+ */
 public class ApiServer {
 
     public static void main(String[] args) throws IOException {
@@ -62,6 +72,18 @@ public class ApiServer {
         @Override
         public void handle(HttpExchange ex) throws IOException {
             String path = ex.getRequestURI().getPath();
+            if (path.startsWith("/vehicle-photos/")) {
+                String name = path.substring("/vehicle-photos/".length());
+                if (!name.matches("V[0-9]+\\.(jpg|png|gif|webp)")) { ex.sendResponseHeaders(404, -1); return; }
+                File image = new File("data/vehicle-photos", name);
+                if (!image.isFile()) { ex.sendResponseHeaders(404, -1); return; }
+                String type = name.endsWith(".jpg") ? "image/jpeg" : "image/" + name.substring(name.lastIndexOf('.') + 1);
+                ex.getResponseHeaders().set("Content-Type", type);
+                byte[] content = Files.readAllBytes(image.toPath());
+                ex.sendResponseHeaders(200, content.length);
+                try (OutputStream os = ex.getResponseBody()) { os.write(content); }
+                return;
+            }
             if (path.equals("/")) path = "/index.html";
 
             File root = new File("frontend").getCanonicalFile();

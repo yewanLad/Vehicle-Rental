@@ -84,4 +84,30 @@ public class MaintenanceList {
         for (MaintenanceRecord r : records) ids.add(r.getId());
         return IdGenerator.next("M", ids);
     }
+    public void saveToFile() {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(FILE_PATH))) {
+            for (MaintenanceRecord r : records) {
+                bw.write(r.toFileString());
+                bw.newLine();
+            }
+        } catch (IOException e) {
+            System.out.println("Error saving maintenance records: " + e.getMessage());
+        }
+    }
+
+    public void loadFromFile() {
+        File file = new File(FILE_PATH);
+        if (!file.exists()) return;
+
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                String[] p = line.split(",", -1);
+                records.add(new MaintenanceRecord(p[0], p[1], p[2], Double.parseDouble(p[3]), p[4]));
+            }
+        } catch (IOException e) {
+            System.out.println("Error loading maintenance records: " + e.getMessage());
+        }
+    }
 }
