@@ -30,7 +30,7 @@ function renderNav(activePage) {
     const shell = document.getElementById("app-shell");
     shell.insertAdjacentHTML("afterbegin", `
         <div class="sidebar">
-            <div class="brand">Rental System</div>
+            <div class="brand">Prime Ridez</div>
             <div class="session"><strong>${esc(user.username)}</strong><br>${esc(user.role)}</div>
             <nav>${navHtml}</nav>
             <button class="logout" onclick="doLogout()">Log out</button>
