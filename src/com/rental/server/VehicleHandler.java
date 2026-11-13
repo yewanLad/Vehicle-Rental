@@ -9,8 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.io.File;
 import java.nio.file.Files;
-
-
+import java.util.Base64;
 
 import com.rental.vehicle.*;
 
@@ -39,9 +38,8 @@ final class VehicleHandler {
             case "/api/vehicles/available":
                 if (method(ex, "GET")) list(ex, true);
                 break;
-            case "/api/vehicles/photo": uploadPhoto(ex); break;
-            case "/api/vehicles/photo/remove": removePhoto(ex); break;
             case "/api/vehicles/update": update(ex); break;
+            case "/api/vehicles/photo": photo(ex); break;
             case "/api/vehicles/delete": delete(ex); break;
             default: notFound(ex);
         }
@@ -78,6 +76,12 @@ final class VehicleHandler {
             default: v = new Car(id, brand, model, year, rate, true);
         }
         vehicleList.addVehicle(v);
+        String photoData = form.get("photoData");
+        if (photoData != null && !photoData.isBlank()) {
+            String photoUrl = savePhoto(id, photoData);
+            if (photoUrl == null) { vehicleList.removeVehicle(id); sendJson(ex, 400, errorJson("Choose a JPG, PNG, GIF or WebP image under 5 MB.")); return; }
+            v.setPhotoUrl(photoUrl);
+        }
         vehicleList.saveToFile();
         sendJson(ex, 201, "{\"success\":true,\"vehicle\":" + vehicleJson(v) + "}");
     }
@@ -109,54 +113,49 @@ final class VehicleHandler {
         if (rentalList.hasOpenRentalForVehicle(id)) {
             sendJson(ex, 400, errorJson("This vehicle has an active or confirmed booking and cannot be removed.")); return;
         }
-        Vehicle removed = vehicleList.findById(id);
-        removeImageFile(removed);
         vehicleList.removeVehicle(id);
+        removePhoto(id);
         vehicleList.saveToFile();
         sendJson(ex, 200, "{\"success\":true}");
     }
 
-    private static void uploadPhoto(HttpExchange ex) throws IOException {
-        if (!method(ex, "POST") || requireAdmin(ex) == null) return;
-        Map<String, String> query = parseForm(ex.getRequestURI().getRawQuery());
-        String id = query.get("vehicleId");
+    private static void photo(HttpExchange ex) throws IOException {
+        if (!method(ex, "POST")) return;
+        if (requireAdmin(ex) == null) return;
+        Map<String, String> form = parseForm(readBody(ex));
+        String id = form.get("id");
         Vehicle v = vehicleList.findById(id);
         if (v == null) { sendJson(ex, 404, errorJson("Vehicle not found.")); return; }
-        String type = ex.getRequestHeaders().getFirst("Content-Type");
-        String ext = type != null && type.toLowerCase(Locale.ROOT).contains("png") ? ".png"
-                : type != null && type.toLowerCase(Locale.ROOT).contains("webp") ? ".webp"
-                : type != null && (type.toLowerCase(Locale.ROOT).contains("jpeg") || type.toLowerCase(Locale.ROOT).contains("jpg")) ? ".jpg" : "";
-        if (ext.isEmpty()) { sendJson(ex, 400, errorJson("Choose a JPG, PNG, or WebP photo.")); return; }
-        byte[] bytes;
-        try (var in = ex.getRequestBody()) {
-            bytes = in.readNBytes(2 * 1024 * 1024 + 1);
+        String data = form.get("photoData");
+        if (data == null || data.isBlank()) {
+            removePhoto(id);
+            v.setPhotoUrl("");
+        } else {
+            String url = savePhoto(id, data);
+            if (url == null) { sendJson(ex, 400, errorJson("Choose a JPG, PNG, GIF or WebP image under 5 MB.")); return; }
+            v.setPhotoUrl(url);
         }
-        if (bytes.length == 0 || bytes.length > 2 * 1024 * 1024) { sendJson(ex, 400, errorJson("Photo must be between 1 byte and 2 MB.")); return; }
-        File folder = new File("frontend/images/vehicles");
-        folder.mkdirs();
-        String filename = id + ext;
-        Files.write(new File(folder, filename).toPath(), bytes);
-        // Remove any previous extension after the new image has been safely saved.
-        String oldImage = v.getImage();
-        v.setImage("images/vehicles/" + filename);
-        vehicleList.saveToFile();
-        if (!oldImage.isBlank() && !oldImage.equals(v.getImage())) new File("frontend/" + oldImage).delete();
-        sendJson(ex, 200, "{\"success\":true,\"vehicle\":" + vehicleJson(v) + "}");
-    }
-
-    private static void removePhoto(HttpExchange ex) throws IOException {
-        if (!method(ex, "POST") || requireAdmin(ex) == null) return;
-        String id = parseForm(ex.getRequestURI().getRawQuery()).get("vehicleId");
-        Vehicle v = vehicleList.findById(id);
-        if (v == null) { sendJson(ex, 404, errorJson("Vehicle not found.")); return; }
-        removeImageFile(v);
-        v.setImage("");
         vehicleList.saveToFile();
         sendJson(ex, 200, "{\"success\":true,\"vehicle\":" + vehicleJson(v) + "}");
     }
 
-    private static void removeImageFile(Vehicle v) {
-        if (v != null && !v.getImage().isBlank()) new File("frontend/" + v.getImage()).delete();
+    private static String savePhoto(String id, String dataUrl) throws IOException {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^data:image/(jpeg|png|gif|webp);base64,([A-Za-z0-9+/=]+)$").matcher(dataUrl);
+        if (!m.matches()) return null;
+        byte[] bytes;
+        try { bytes = Base64.getDecoder().decode(m.group(2)); } catch (IllegalArgumentException e) { return null; }
+        if (bytes.length == 0 || bytes.length > 5 * 1024 * 1024) return null;
+        String ext = m.group(1).equals("jpeg") ? "jpg" : m.group(1);
+        File dir = new File("data/vehicle-photos");
+        dir.mkdirs();
+        removePhoto(id);
+        Files.write(new File(dir, id + "." + ext).toPath(), bytes);
+        return "/vehicle-photos/" + id + "." + ext + "?v=" + System.currentTimeMillis();
+    }
+
+    private static void removePhoto(String id) {
+        File dir = new File("data/vehicle-photos");
+        for (String ext : new String[]{"jpg", "png", "gif", "webp"}) new File(dir, id + "." + ext).delete();
     }
 
     /** Shared validation for add + update. Returns an error message or null. */
@@ -178,8 +177,8 @@ final class VehicleHandler {
 
     static String vehicleJson(Vehicle v) {
         return String.format(Locale.ROOT,
-                "{\"id\":\"%s\",\"type\":\"%s\",\"brand\":\"%s\",\"model\":\"%s\",\"year\":%d,\"dailyRate\":%.2f,\"available\":%b,\"image\":\"%s\"}",
-                esc(v.getId()), esc(v.getType()), esc(v.getBrand()), esc(v.getModel()), v.getYear(), v.getDailyRate(), v.isAvailable(), esc(v.getImage()));
+                "{\"id\":\"%s\",\"type\":\"%s\",\"brand\":\"%s\",\"model\":\"%s\",\"year\":%d,\"dailyRate\":%.2f,\"available\":%b,\"photoUrl\":\"%s\"}",
+                esc(v.getId()), esc(v.getType()), esc(v.getBrand()), esc(v.getModel()), v.getYear(), v.getDailyRate(), v.isAvailable(), esc(v.getPhotoUrl()));
     }
 
     static String vehicleName(String vehicleId) {
